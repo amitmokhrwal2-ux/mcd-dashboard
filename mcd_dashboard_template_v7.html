@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCD Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1420; --card:#141b2a; --muted:#8ba3c7; --text:#e6eefc; --accent:#6aa4ff;
+  --ok:#19c37d; --warn:#ffb020; --bad:#ff5d5d; --chip:#1f2840;
+  --hover:#1b2436; --shadow:0 12px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:15px/1.45 'Inter', system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+.container{max-width:1220px;margin:24px auto;padding:0 16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:960px){.row{grid-template-columns:1fr}}
+.card{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.card h2,.card h3{margin:4px 0 12px}
+.input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #2b3550;background:#10182a;color:var(--text)}
+.btn{padding:10px 14px;border-radius:10px;border:0;background:var(--accent);color:#051024;font-weight:700;cursor:pointer}
+.btn.ghost{background:#26324d;color:#c9d7ff}
+.btn.warn{background:var(--warn);color:#1b1400}
+.btn.bad{background:#ef476f}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:var(--chip);color:var(--muted);font-size:12px}
+.list{margin-top:8px;max-height:46vh;overflow:auto;border:1px solid #27304a;border-radius:10px}
+.item{padding:10px;border-bottom:1px solid #223;}
+.item:hover{background:var(--hover);cursor:pointer}
+.center{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap}
+.mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace}
+.small{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:960px){.grid2{grid-template-columns:1fr}}
+.header-nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.headbox{background:#11182a;border:1px solid #27304a;padding:14px;border-radius:14px;text-align:center}
+.toggle{cursor:pointer;user-select:none}
+.hidden{display:none}
+.sticky-fab{position:fixed;right:16px;bottom:16px}
+hr.sep{border:0;border-top:1px solid #25314d;margin:10px 0}
+.chart{height:280px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- JSON will be injected by Go: either placeholders or <script>const EMP=... -->
+<script>const EMP = {{EMP_JSON}};</script>
+<script>const SCH = {{SCH_JSON}};</script>
+<script>const STAFF = {{STAFF_JSON}};</script>  <!-- Placeholder yahan -->
+<script>
+// Chart placeholders; Go replaces with arrays if present
+const ZLBL = {{ZLBL}} || [];
+const ZVAL = {{ZVAL}} || [];
+const DLBL = {{DLBL}} || [];
+const DVAL = {{DVAL}} || [];
+</script>
+</head>
+<body>
+<div class="container">
+  <h1 style="margin:0 0 8px">🧭 MCD Dashboard</h1>
+
+  <div class="header-nums">
+    <div class="headbox"><div class="small">TOTAL EMPLOYEES</div><div style="font-size:28px" id="num-emps">{{TOTAL_EMP}}</div></div>
+    <div class="headbox"><div class="small">SCHOOLS</div><div style="font-size:28px" id="num-schools">{{TOTAL_SCHOOLS}}</div></div>
+    <div class="headbox"><div class="small">ZONES</div><div style="font-size:28px" id="num-zones">{{TOTAL_ZONES}}</div></div>
+    <div class="headbox"><div class="small">DESIGNATIONS</div><div style="font-size:28px" id="num-desigs">{{TOTAL_DESIGS}}</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>Zone-wise Distribution</h3>
+      <canvas id="zoneChart" class="chart"></canvas>
+    </div>
+    <div class="card">
+      <h3>Top Designations</h3>
+      <canvas id="desigChart" class="chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Advanced Filter (collapsible) -->
+<!-- 🔄 ADVANCED FILTER SEARCH (New Full Version) -->
+<div class="card">
+  <div class="center" style="justify-content:space-between">
+    <h2 style="margin:0">Advanced Filter Search</h2>
+    <div class="toggle small" onclick="toggleBlock('filter-body','filter-arrow')">
+      <span id="filter-arrow">▾</span>
+    </div>
+  </div>
+
+  <div id="filter-body">
+    <div class="grid2">
+
+      <div>
+        <label class="small">Zone</label>
+        <select id="f-zone" class="input"><option value="">All Zones</option></select>
+      </div>
+
+      <div>
+        <label class="small">Designation</label>
+        <select id="f-des" class="input"><option value="">All Designations</option></select>
+      </div>
+
+      <div>
+        <label class="small">Gender</label>
+        <select id="f-gen" class="input">
+          <option value="">All</option>
+          <option>Male</option>
+          <option>Female</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="small">Marital Status</label>
+        <select id="f-mar" class="input">
+          <option value="">All</option>
+          <option>Married</option>
+          <option>Unmarried</option>
+          <option>Divorced</option>
+          <option>Widow</option>
+          <option>Separated</option>
+          <option>Live-in</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="small">School</label>
+        <select id="f-sch" class="input"><option value="">All Schools</option></select>
+      </div>
+
+      <div>
+        <label class="small">Age (≥)</label>
+        <select id="f-age" class="input">
+          <option value="">All</option>
+          <option value="20">20+</option>
+          <option value="25">25+</option>
+          <option value="30">30+</option>
+          <option value="35">35+</option>
+          <option value="40">40+</option>
+          <option value="45">45+</option>
+          <option value="50">50+</option>
+          <option value="55">55+</option>
+          <option value="60">60+</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="center" style="margin-top:10px">
+      <button class="btn" onclick="applyFilter()">🔎 Apply Filter</button>
+      <button class="btn ghost" onclick="resetFilter()">♻️ Reset</button>
+    </div>
+
+    <div id="filter-out" style="margin-top:10px"></div>
+  </div>
+</div>
+
+
+  <div class="row">
+    <div class="card">
+      <h3>School Search (by Name)</h3>
+      <input id="schname" class="input" placeholder="e.g., rohini, jklm" oninput="searchSchoolByName()">
+      <div class="list" id="schname-results"></div>
+    </div>
+    <div class="card">
+      <h3>Employee Search (by Name)</h3>
+      <input id="empname" class="input" placeholder="e.g., jyoti, amit" oninput="searchEmpByName()">
+      <div class="list" id="empname-results"></div>
+    </div>
+  </div>
+
+  <!-- Today's sections with Hide/Show -->
+  <div class="row">
+    <div class="card">
+      <div class="center" style="justify-content:space-between">
+        <h3>🎂 Birthdays Today</h3>
+<div id="bday-today" class="small">Checking birthdays...</div>
+<button onclick="sendBirthdays()" class="btn">📧 Send Birthday Emails</button>
+
+<script>
+function showBirthdaysToday(){
+  const today=new Date();
+  const td=today.getDate(), tm=today.getMonth();
+  const arr=[];
+  for(const k in EMP){
+    const e=EMP[k];
+    if(!e.dob) continue;
+    const d=new Date(e.dob);
+    if(isNaN(d)) continue;
+    if(d.getDate()===td && d.getMonth()===tm){
+      arr.push(`${e.name} (${e.id}) — ${e.zone}`);
+    }
+  }
+  const box=document.getElementById('bday-today');
+  if(!box) return;
+  if(arr.length===0){
+    box.innerHTML='No birthdays today 🎂';
+  } else {
+    box.innerHTML='<ul>'+arr.map(a=>`<li>${a}</li>`).join('')+'</ul>';
+  }
+}
+document.addEventListener('DOMContentLoaded',showBirthdaysToday);
+</script>
+
+      <div id="bday-body"><ul id="bday-list" style="margin:8px 0 0 16px;padding:0"></ul></div>
+      <div class="center" style="margin-top:10px">
+        <button class="btn ghost" onclick="sendBirthdays()">📧 Send Birthday Emails</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="center" style="justify-content:space-between">
+        <h3 style="margin:0">🏅 Work Anniversaries Today</h3>
+        <div class="toggle small" onclick="toggleBlock('ann-body','ann-arrow')">
+          <span id="ann-arrow">▾</span>
+        </div>
+      </div>
+      <div id="ann-body"><ul id="ann-list" style="margin:8px 0 0 16px;padding:0"></ul></div>
+      <div class="center" style="margin-top:10px">
+        <button class="btn ghost" onclick="sendAnniversaries()">📧 Send Work Anniversary Emails</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email center -->
+  <div class="card">
+    <h3 style="margin-top:0">📧 Email Center</h3>
+    <div class="small">Gmail SMTP (App Password). Toggle between Live and Dry-Run.</div>
+    <div class="center" style="margin:10px 0">
+      <label class="small" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="liveToggle" onchange="toggleLiveMode()"> Enable Live Mode
+      </label>
+      <div id="live-status" class="small" style="color:var(--ok)">✅ Live Mode — emails will be sent.</div>
+    </div>
+    <div id="email-log" class="small" style="margin-top:8px;color:var(--muted)"></div>
+  </div>
+
+  <!-- School Lookup -->
+  
+<div class="card">
+  <div class="center" style="justify-content:space-between">
+    <h2 style="margin:0">🏫 School Lookup</h2>
+    <div class="toggle small" onclick="toggleBlock('sch-body','sch-arrow')">
+      <span id="sch-arrow">▾</span>
+    </div>
+  </div>
+  <div id="sch-body">
+    <div class="center" style="gap:8px">
+      <input id="schid" class="input" placeholder="Enter School ID (e.g., 1355419)">
+      <button class="btn" onclick="findSchool()">Search School</button>
+    </div>
+    <div id="sch-out" style="margin-top:12px"></div>
+  </div>
+</div>
+<!-- Staffing Summary Page -->
+<div class="card" id="staffing-summary">
+  <div class="center" style="justify-content:space-between">
+    <h2 style="margin:0">📊 Staff Summary</h2>
+    <div class="toggle small" onclick="toggleBlock('staff-body','staff-arrow')">
+      <span id="staff-arrow">▾</span>
+    </div>
+  </div>
+  <div id="staff-body">
+    <div class="center" style="justify-content:space-between">
+      <div class="grid2">
+        <input id="staff-search" class="input" placeholder="Search School Name or ID" oninput="searchStaffing()">
+        <select id="f-zone-staff" class="input"><option value="">All Zones</option></select>
+        <select id="f-status" class="input">
+          <option value="">All Status</option>
+          <option value="surplus">Surplus Only</option>
+          <option value="vacancy">Vacancy Only</option>
+          <option value="balanced">Balanced</option>
+        </select>
+        <select id="f-principal" class="input">
+          <option value="">All Principal</option>
+          <option value="available">Available</option>
+          <option value="vacant">Vacant</option>
+        </select>
+        <select id="f-special" class="input">
+          <option value="">All Special Edu</option>
+          <option value="available">Available</option>
+          <option value="vacant">Vacant</option>
+        </select>
+      </div>
+      <button class="btn" onclick="applyStaffFilter()">Apply</button>
+    </div>
+    <div id="staff-results" class="list" style="margin-top:10px"></div>
+    <div class="center" style="margin-top:10px">
+      <button class="btn ghost" onclick="exportStaffCSV()">📥 Export CSV</button>
+    </div>
+  </div>
+</div>
+  <!-- Employee Lookup -->
+ 
+<div class="card">
+  <div class="center" style="justify-content:space-between">
+    <h2 style="margin:0">🧑‍🏫 Employee Lookup</h2>
+    <div class="toggle small" onclick="toggleBlock('emp-body','emp-arrow')">
+      <span id="emp-arrow">▾</span>
+    </div>
+  </div>
+  <div id="emp-body">
+    <div class="center" style="gap:8px">
+      <input id="empid" class="input" placeholder="Enter Employee ID">
+      <button class="btn" onclick="findEmp()">Search Employee</button>
+    </div>
+    <div id="emp-out" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<button class="btn sticky-fab" onclick="window.print()">🖨️ Print PDF</button>
+
+<script>
+// ---------- utils ----------
+function _clean(s){s=String(s||"").trim();return s.endsWith(".0")?s.slice(0,-2):s;}
+function _digits(s){s=String(s||"");var m=s.match(/(\d{5,})/);return m?m[1]:"";}
+function toggleBlock(id, arrowId){
+  const body = document.getElementById(id); const a = document.getElementById(arrowId);
+  if(!body) return; const hide = body.classList.toggle('hidden'); if(a){ a.textContent = hide?'▸':'▾'; }
+}
+function todayDM(){ const d=new Date(); return [d.getDate(), d.getMonth()]; }
+function parseDMY(s){
+  if(!s) return null;
+  s = s.trim(); // formats supported: 02/Feb/2009, 2/Feb/2009, 02-Jan-2006, 02/01/2006
+  const m = s.match(/^(\d{1,2})[\/-]([A-Za-z]{3}|\d{2})[\/-](\d{4})$/);
+  if(!m) return null;
+  const dd = +m[1];
+  let mm = m[2];
+  const yyyy = +m[3];
+  const monMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  if(/\d{2}/.test(mm)){ mm = +mm-1; } else { mm = monMap[(mm[0].toUpperCase()+mm.slice(1).toLowerCase())] }
+  if(mm==null||isNaN(mm)) return null;
+  return new Date(yyyy, mm, dd);
+}
+
+// ---------- charts ----------
+(function(){
+  try{
+    const zctx=document.getElementById('zoneChart').getContext('2d');
+    new Chart(zctx,{type:'bar',data:{labels:ZLBL,datasets:[{label:'Employees',data:ZVAL}]}},{responsive:true});
+    const dctx=document.getElementById('desigChart').getContext('2d');
+    new Chart(dctx,{type:'bar',data:{labels:DLBL,datasets:[{label:'Employees',data:DVAL}]}},{responsive:true});
+  }catch(e){console.warn('chart init',e);}
+})();
+
+// ---------- search (by name) ----------
+function searchSchoolByName(){
+  const q=(document.getElementById('schname')||{}).value||''; const wrap=document.getElementById('schname-results'); if(!wrap) return;
+  wrap.innerHTML=''; const qq=q.trim().toLowerCase(); if(!qq) return;
+  const arr=[]; for(const sid in SCH){ const s = SCH[sid]; if(!s||!s.name) continue; if(s.name.toLowerCase().includes(qq)){ arr.push(s); } }
+  if(!arr.length){ wrap.innerHTML='<div class="item small">No matching schools</div>'; return; }
+  arr.sort((a,b)=>a.name.localeCompare(b.name));
+  wrap.innerHTML = arr.slice(0,40).map(s=>`<div class="item" onclick="openSchool('${s.id}')"><div><b>${s.name}</b></div><div class="small mono">${s.id} • ${s.zone||''}</div></div>`).join('');
+}
+function searchEmpByName(){
+  const q=(document.getElementById('empname')||{}).value||''; const wrap=document.getElementById('empname-results'); if(!wrap) return;
+  wrap.innerHTML=''; const qq=q.trim().toLowerCase(); if(!qq) return;
+  const arr=[]; for(const id in EMP){ const e = EMP[id]; if(!e||!e.name) continue; if(e.name.toLowerCase().includes(qq)){ arr.push(e); } }
+  if(!arr.length){ wrap.innerHTML='<div class="item small">No matching employees</div>'; return; }
+  arr.sort((a,b)=>a.name.localeCompare(b.name));
+  wrap.innerHTML = arr.slice(0,40).map(e=>`<div class="item" onclick="openEmployee('${e.id}')"><div><b>${e.name}</b> <span class="badge">${e.designation||''}</span></div><div class="small mono">${e.id} • ${e.school_name||''}</div></div>`).join('');
+}
+function openSchool(sid){ const inp=document.getElementById('schid'); if(inp) inp.value = sid; const w=document.getElementById('schname-results'); if(w) w.innerHTML=''; findSchool(); window.scrollTo({top:0,behavior:'smooth'}); }
+function openEmployee(id){ const inp=document.getElementById('empid'); if(inp) inp.value = id; const w=document.getElementById('empname-results'); if(w) w.innerHTML=''; findEmp(); window.scrollTo({top:0,behavior:'smooth'}); }
+
+// ---------- lookups ----------
+function findSchool(){
+  const raw=(document.getElementById('schid')||{}).value||''; const sid=_digits(raw); const out=document.getElementById('sch-out');
+  if(!out) return; if(!sid||!SCH[sid]){ out.innerHTML='<div class="small">No school found.</div>'; return; }
+  const s = SCH[sid];
+  const need = Math.ceil((s.max_present_students||0)/40.0);
+  const tCount = Object.values(EMP).filter(e=>e.school_id===sid && (e.designation||'').toLowerCase().includes('teacher')).length;
+  const principal = Object.values(EMP).filter(e=>e.school_id===sid && (e.designation||'').toLowerCase().includes('principal')).length>0;
+  const surplus = tCount-need;
+  const vacBadge = surplus>0? `<span class="badge" style="background:var(--ok);color:#031">Surplus ${surplus}</span>` :
+                  surplus<0? `<span class="badge" style="background:#ffcc00;color:#001f3f;font-weight:bold;font-size:14px">Vacancy ${-surplus}</span>` :
+                             `<span class="badge">Balanced</span>`;
+  const pBadge = principal? `<span class="badge" style="background:var(--ok);color:#031">Principal: Available</span>`:
+                          `<span class="badge" style="background:#ffcccc;color:#8b0000;font-weight:bold;font-size:14px">Principal: Vacant</span>`;
+  out.innerHTML = `
+  <div class="grid2">
+    <div class="card">
+      <h3>School Info</h3>
+      <div class="kv">
+        <div class="small">School ID</div><div class="mono">${sid}</div>
+        <div class="small">School Name</div><div>${s.name||''}</div>
+        <div class="small">Zone</div><div>${s.zone||''}</div>
+        <div class="small">School Inspector</div><div>${s.si_name||''}</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Staffing & Ratio</h3>
+      <div class="kv">
+        <div class="small">Teachers</div><div><span class="badge">${tCount}</span></div>
+        <div class="small">Needed @1:40</div><div><span class="badge">${need}</span></div>
+        <div class="small">Status</div><div>${vacBadge}</div>
+        <div class="small">Principal</div><div>${pBadge}</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>DBT / Admissions</h3>
+      <div class="kv">
+        <div class="small">Max Total Students</div><div><span class="badge">${s.max_total_students||0}</span></div>
+        <div class="small">Max Present Students</div><div><span class="badge">${s.max_present_students||0}</span></div>
+        <div class="small">With Account</div><div>${s.with_account||0}</div>
+        <div class="small">Without Account</div><div>${s.without_account||0}</div>
+        <div class="small">With Aadhaar</div><div>${s.with_aadhaar||0}</div>
+        <div class="small">Without Aadhaar</div><div>${s.without_aadhaar||0}</div>
+        <div class="small">Aadhaar Linked A/C</div><div>${s.aadhaar_linked_account||0}</div>
+        <div class="small">New Adm (This Month)</div><div>${s.new_admission_this_month||0}</div>
+        <div class="small">New Adm (This Session)</div><div>${s.new_admission_this_session||0}</div>
+        <div class="small">DBT Received (Student)</div><div>${s.dbt_received_student||0}</div>
+        <div class="small">DBT Received (Parent)</div><div>${s.dbt_received_parent||0}</div>
+        <div class="small">Received By (S+P)</div><div>${s.received_by_student_parent||0}</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Staff Roster</h3>
+      <div class="list">
+        ${Object.values(EMP).filter(e=>e.school_id===sid).sort((a,b)=> (a.designation||'').localeCompare(b.designation||'')).map(r=>`
+          <div class="item" onclick="openEmployee('${r.id}')">
+            <div><b>${r.name||''}</b> <span class="badge">${r.designation||''}</span></div>
+            <div class="small mono">${r.id} • ${_clean(r.mobile)}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function findEmp(){
+  const key=(document.getElementById('empid')||{}).value||''; const out=document.getElementById('emp-out');
+  if(!out) return; const rec=EMP[key]||EMP[_clean(key)];
+  if(!rec){ out.innerHTML='<div class="small">No employee found.</div>'; return; }
+  out.innerHTML = `
+<div class="grid2">
+  <div class="card">
+    <h3>Basic Information</h3>
+    <div class="kv">
+      <div class="small">Employee ID</div><div class="mono">${rec.id}</div>
+      <div class="small">Name</div><div>${rec.name||''}</div>
+      <div class="small">Designation</div><div>${rec.designation||''}</div>
+      <div class="small">Zone</div><div>${rec.zone||''}</div>
+      <div class="small">Status</div><div><span class="badge">${rec.status||''}</span></div>
+      <div class="small">DOB</div><div>${rec.dob||''}</div>
+      <div class="small">Gender</div><div>${rec.gender||''}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Personal Details</h3>
+    <div class="kv">
+      <div class="small">Father's Name</div><div>${rec.father_name||''}</div>
+      <div class="small">Mother's Name</div><div>${rec.mother_name||''}</div>
+      <div class="small">Marital Status</div><div>${rec.marital_status||''}</div>
+      <div class="small">Spouse Name</div><div>${rec.spouse_name||''}</div>
+      <div class="small">Religion</div><div>${rec.religion||''}</div>
+      <div class="small">Physical Category</div><div>${rec.physical_category||''}</div>
+      <div class="small">Home Town</div><div>${rec.home_town||''}</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h3>Contact & Address</h3>
+    <div class="kv">
+      <div class="small">Mobile</div><div>${_clean(rec.mobile)}</div>
+      <div class="small">Email</div><div>${rec.email||''}</div>
+      <div class="small">Emergency Name</div><div>${rec.emergency_name||''}</div>
+      <div class="small">Emergency No</div><div>${_clean(rec.emergency_no)}</div>
+      <div class="small">Correspondence Address</div><div>${rec.correspond_address||''}</div>
+      <div class="small">Permanent Address</div><div>${rec.permanent_address||''}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Education</h3>
+    <div class="kv">
+      <div class="small">Educational Qual.</div><div>${rec.edu_qual||''}</div>
+      <div class="small">Professional Qual.</div><div>${rec.prof_qual||''}</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h3>Service Details</h3>
+    <div class="kv">
+      <div class="small">Date of Joining</div><div>${rec.doj||''}</div>
+      <div class="small">Appointment Type</div><div>${rec.appointment_type||''}</div>
+      <div class="small">Last Promotion Date</div><div>${rec.promotion_date||''}</div>
+      <div class="small">Last Transfer Date</div><div>${rec.transfer_date||''}</div>
+      <div class="small">On Deputed</div><div>${rec.deputed||''}</div>
+      <div class="small">Last Training</div><div>${rec.last_training||''}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Pay & Bank Details</h3>
+    <div class="kv">
+      <div class="small">Pay Level</div><div>${rec.pay_level||''}</div>
+      <div class="small">Basic Pay</div><div>${rec.basic_pay||''}</div>
+      <div class="small">PRAN/GPF No.</div><div>${rec.pran_gpf||''}</div>
+      <div class="small">PAN</div><div>${rec.pan||''}</div>
+      <div class="small">Pension Type</div><div>${rec.pension_type||''}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Miscellaneous</h3>
+  <div class="kv">
+    <div class="small">Accommodation</div><div>${rec.accommodation||''}</div>
+    <div class="small">Messenger</div><div>${rec.messenger||''}</div>
+    <div class="small">Messenger No.</div><div>${rec.messenger_no||''}</div>
+    <div class="small">Extra Duty</div><div>${rec.extra_duty||''}</div>
+    <div class="small">Medical Issue</div><div>${rec.medical_issue||''}</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>School</h3>
+  <div>${rec.school_name||''}</div>
+  <div class="small mono">${rec.school_id||''}</div>
+</div>`;
+}
+
+// ---------- filter ----------
+// ===================== ADVANCED FILTER =====================
+// ===================== ADVANCED FILTER (Stable Matching) =====================
+function populateFilterDropdowns() {
+  const zones = new Set(), desigs = new Set(), schools = new Set();
+
+  for (const id in EMP) {
+    const e = EMP[id];
+    if (!e || !e.designation) continue;
+
+    // Normalize display values
+    if (e.zone) zones.add(e.zone.trim());
+    if (e.designation) desigs.add(e.designation.trim());
+    if (e.school_name) schools.add(e.school_name.trim());
+  }
+
+  const fill = (id, arr, label) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = `<option value="">All ${label}</option>` +
+      Array.from(arr).sort((a, b) => a.localeCompare(b))
+      .map(v => `<option value="${v}">${v}</option>`)
+      .join('');
+  };
+
+  fill('f-zone', zones, "Zones");
+  fill('f-des', desigs, "Designations");
+  fill('f-sch', schools, "Schools");
+}
+
+function normalize(v) {
+  return String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function getAge(dob) {
+  const d = parseDMY(dob);
+  if (!d) return 0;
+  const t = new Date();
+  let age = t.getFullYear() - d.getFullYear();
+  const m = t.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
+  return age;
+}
+
+function applyFilter() {
+  const des = normalize((document.getElementById('f-des') || {}).value);
+  const zone = normalize((document.getElementById('f-zone') || {}).value);
+  const gen = normalize((document.getElementById('f-gen') || {}).value);
+  const mar = normalize((document.getElementById('f-mar') || {}).value);
+  const sch = normalize((document.getElementById('f-sch') || {}).value);
+  const ageVal = parseInt((document.getElementById('f-age') || {}).value) || 0;
+
+  const out = document.getElementById('filter-out');
+  if (!out) return;
+  const arr = [];
+
+  for (const id in EMP) {
+    const e = EMP[id];
+    if (!e) continue;
+
+    const d = normalize(e.designation);
+    const z = normalize(e.zone);
+    const g = normalize(e.gender);
+    const m = normalize(e.marital_status);
+    const s = normalize(e.school_name);
+    const a = getAge(e.dob);
+
+    let ok = true;
+    if (des && !d.includes(des)) ok = false;
+    if (zone && !z.includes(zone)) ok = false;
+    if (gen && g !== gen) ok = false;
+    if (mar && m !== mar) ok = false;
+    if (sch && !s.includes(sch)) ok = false;
+    if (ageVal > 0 && a < ageVal) ok = false;
+
+    if (ok) arr.push(e);
+  }
+
+  if (!arr.length) {
+    out.innerHTML = `<div class="small">No records found.</div>`;
+    return;
+  }
+
+  arr.sort((a, b) => a.name.localeCompare(b.name));
+
+  out.innerHTML = `
+  <div class="list">
+    ${arr.slice(0, 500).map(r => `
+      <div class="item" onclick="openEmployee('${r.id}')">
+        <div><b>${r.name}</b> <span class="badge">${r.designation || ''}</span></div>
+        <div class="small mono">
+          ${r.zone || ''} • ${r.school_name || ''} • Age: ${getAge(r.dob) || '–'}
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function resetFilter() {
+  ['f-des','f-zone','f-gen','f-mar','f-sch','f-age'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('filter-out').innerHTML = '';
+}
+
+// Run once on load
+document.addEventListener('DOMContentLoaded', populateFilterDropdowns);
+
+// ---------- email center ----------
+function toggleLiveMode(){
+  const on = document.getElementById('liveToggle').checked ? 1 : 0;
+  fetch('/toggle_live?on='+on).then(r=>r.text()).then(t=>{
+    const s=document.getElementById('live-status');
+    if(on){ s.style.color='var(--ok)'; s.textContent='✅ Live Mode — emails will be sent.'; }
+    else  { s.style.color='var(--warn)'; s.textContent='🧪 Dry Run Mode — no real emails sent.'; }
+  });
+}
+function sendBirthdays(){
+  fetch('/send_birthdays').then(r=>r.text()).then(t=>{
+    (document.getElementById('email-log')||{}).textContent=t;
+    alert(t);
+  }).catch(_=>alert('❌ Error sending birthday emails.'));
+}
+function sendAnniversaries(){
+  fetch('/send_anniversaries').then(r=>r.text()).then(t=>{
+    (document.getElementById('email-log')||{}).textContent=t;
+    alert(t);
+  }).catch(_=>alert('❌ Error sending anniversary emails.'));
+}
+
+// ---------- mount today's (birthdays & anniversaries) ----------
+// ---------- mount today's (birthdays & anniversaries) ----------
+(function(){
+  const [dd, mm] = todayDM();
+  const b = document.getElementById('bday-list'); 
+  const a = document.getElementById('ann-list');
+  let bc = 0, ac = 0;
+  const byName = (x, y) => (x.name || '').localeCompare(y.name || '');
+  const bArr = [];  // Separate declarations to avoid comma issues
+  const aArr = [];
+  for (const id in EMP) {
+    const e = EMP[id]; 
+    if (!e) continue;
+    // Birthdays
+    const dob = parseDMY(e.dob); 
+    if (dob && dob.getDate() === dd && dob.getMonth() === mm) { 
+      bArr.push(e); 
+    }
+    // Anniversaries (DOJ from Services.csv merge)
+    const doj = parseDMY(e.doj); 
+    if (doj && doj.getDate() === dd && doj.getMonth() === mm) { 
+      aArr.push(e); 
+    }
+  }
+  bArr.sort(byName); 
+  aArr.sort(byName);
+  if (b) { 
+    b.innerHTML = bArr.length ? bArr.map(e => `<li>🎂 ${e.name || ''}</li>`).join('') : '<li class="small">No birthdays today 🕊️</li>'; 
+    bc = bArr.length; 
+  }
+  if (a) { 
+    a.innerHTML = aArr.length ? aArr.map(e => `<li>🏅 ${e.name || ''}</li>`).join('') : '<li class="small">No work anniversaries today 🕊️</li>'; 
+    ac = aArr.length; 
+  }
+})();
+// Populate staffing filters
+function populateStaffFilters() {
+  const zones = new Set(Object.values(STAFF).map(s => s.zone));
+  const zEl = document.getElementById('f-zone-staff');
+  zEl.innerHTML = '<option value="">All Zones</option>' + Array.from(zones).sort().map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+// Search + Filter
+function searchStaffing() {
+  const q = (document.getElementById('staff-search') || {}).value.toLowerCase();
+  applyStaffFilter(q);  // Auto-apply on input
+}
+function applyStaffFilter(q = '') {
+  const zone = (document.getElementById('f-zone-staff') || {}).value.toLowerCase();
+  const status = (document.getElementById('f-status') || {}).value;
+  const prin = (document.getElementById('f-principal') || {}).value;
+  const spec = (document.getElementById('f-special') || {}).value;
+  const out = document.getElementById('staff-results');
+  let arr = STAFF.filter(s => {
+    const matchName = s.name.toLowerCase().includes(q) || s.id.includes(q);
+    const matchZone = !zone || s.zone.toLowerCase() === zone;
+    const svStatus = s.surplus_vacancy > 0 ? 'surplus' : (s.surplus_vacancy < 0 ? 'vacancy' : 'balanced');
+    const matchStatus = !status || svStatus === status;
+    const pStatus = s.has_principal ? 'available' : 'vacant';
+    const matchPrin = !prin || pStatus === prin;
+    const seStatus = s.has_special_educator ? 'available' : 'vacant';
+    const matchSpec = !spec || seStatus === spec;
+    return matchName && matchZone && matchStatus && matchPrin && matchSpec;
+  });
+  if (!arr.length) {
+    out.innerHTML = '<div class="item small">No schools match.</div>';
+    return;
+  }
+  // Sort by vacancy (highest first)
+  arr.sort((a, b) => Math.abs(b.surplus_vacancy) - Math.abs(a.surplus_vacancy));
+  out.innerHTML = arr.slice(0, 100).map(s => {  // Limit 100 for perf
+    const svBadge = s.surplus_vacancy > 0 ? `<span class="badge" style="background:var(--ok)">+${s.surplus_vacancy}</span>` :
+                s.surplus_vacancy < 0 ? `<span class="badge" style="background:#ffcc00;color:#001f3f;font-weight:bold;font-size:14px">-${Math.abs(s.surplus_vacancy)}</span>` :
+                '<span class="badge">Balanced</span>';
+    const pBadge = s.has_principal ? '<span class="badge" style="background:var(--ok)">Principal: Yes</span>' : '<span class="badge" style="background:#ffcccc;color:#8b0000;font-weight:bold;font-size:14px">Principal: No</span>';
+    const seBadge = s.has_special_educator ? '<span class="badge" style="background:var(--ok)">Special Edu: Yes</span>' : '<span class="badge" style="background:#ffcccc;color:#8b0000;font-weight:bold;font-size:14px">Special Edu: No</span>';
+    const ratioWarn = s.ratio > 40 ? ' style="color:var(--warn)"' : '';
+    return `<div class="item" onclick="openSchool('${s.id}')">
+      <div><b>${s.name}</b> ${svBadge}</div>
+      <div class="small mono">${s.id} • ${s.zone} • Staff: ${s.total_staff} • Ratio: <span${ratioWarn}>${s.ratio.toFixed(1)}:1</span></div>
+      <div class="small">${pBadge} ${seBadge}</div>
+    </div>`;
+  }).join('');
+}
+
+// Export CSV (simple)
+function exportStaffCSV() {
+  const rows = [['ID', 'Name', 'Zone', 'Needed T', 'Actual T', 'Surplus/Vac', 'Principal', 'Special Edu', 'Total Staff', 'Ratio']];
+  STAFF.forEach(s => {
+    rows.push([s.id, s.name, s.zone, s.needed_teachers, s.actual_teachers, s.surplus_vacancy,
+               s.has_principal ? 'Yes' : 'No', s.has_special_educator ? 'Yes' : 'No', s.total_staff, s.ratio.toFixed(1)]);
+  });
+  let csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'staffing_summary.csv'; a.click();
+}
+
+// On load
+document.addEventListener('DOMContentLoaded', () => { populateStaffFilters(); applyStaffFilter(); });
+</script>
+</body>
+</html>
