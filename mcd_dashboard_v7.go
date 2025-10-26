@@ -46,7 +46,7 @@ var (
 	basicCSV     = flag.String("basic", "Basic.csv", "Basic CSV path")
 	servCSV      = flag.String("services", "Services.csv", "Services CSV path")
 	dbtCSV       = flag.String("dbt", "Dashboard_Summary_202509.csv", "DBT CSV path")
-	tplPath      = flag.String("template", "mcd_dashboard_template_v11.1.html", "HTML template path")
+	tplPath      = flag.String("template", "mcd_dashboard_template_v7.html", "HTML template path")
 	outHTML      = flag.String("out", "./out/mcd_dashboard_202509_v11.1.html", "Output HTML path")
 	title        = flag.String("title", "MCD Dashboard", "Document title")
 	listen       = flag.String("listen", ":8080", "HTTP listen address")
