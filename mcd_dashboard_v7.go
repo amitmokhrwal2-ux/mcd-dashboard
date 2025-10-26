@@ -13,7 +13,7 @@
 //	  -basic ./Basic.csv \
 //	  -services ./Services.csv \
 //	  -dbt ./Dashboard_Summary_202509.csv \
-//	  -template ./mcd_dashboard_template_v11.1.html \
+//	  -template ./mcd_dashboard_template_v7.html \
 //	  -out ./out/mcd_dashboard_202509_v11.1.html \
 //	  -cache ./out/doj_cache.json \
 //	  -rebuild
